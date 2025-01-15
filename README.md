@@ -19,14 +19,19 @@ This project is a web scraper designed to extract reviews from Google Maps. It c
 ## Installation
 
 1. Clone the repository:
+
     ```bash
     git clone https://github.com/yourusername/scraper-reviews-google-maps.git
     ```
+
 2. Navigate to the project directory:
+
     ```bash
     cd scraper-reviews-google-maps
     ```
+
 3. Install the required packages:
+
     ```bash
     pip install -r requirements.txt
     ```
@@ -35,9 +40,11 @@ This project is a web scraper designed to extract reviews from Google Maps. It c
 
 1. Open the `config.py` file and set the `GOOGLE_MAPS_URL` to the URL of the business you want to scrape reviews for.
 2. Run the scraper:
+
     ```bash
     python scraper.py
     ```
+
 3. The reviews will be saved to a `reviews.csv` file in the project directory.
 
 ## Contributing
