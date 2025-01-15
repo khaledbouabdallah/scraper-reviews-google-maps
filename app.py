@@ -14,11 +14,18 @@ import logging
 # import types for type hinting 
 from selenium.webdriver.remote.webelement import WebElement
 
-# setup logger for the module on a file
-logging.basicConfig(filename='app.log', level=logging.INFO)
 
+
+NOW = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 DATA_PATH = "data"
 MAPS_LINK = "https://maps.google.com/"
+
+# setup logger for the module on a file
+
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
+logging.basicConfig(filename=f'logs/app_{NOW}.log', level=logging.INFO)
 
 class GoogleMapsReviewScraper:
     """
@@ -33,7 +40,7 @@ class GoogleMapsReviewScraper:
         # todo: make sure the URL is a valid Google Maps reviews link 
         options = webdriver.ChromeOptions()
         self.reviews = []
-        self.now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.now = NOW
         self.headless = headless
         self.original = original
         self.concat_extra = concat_extra
@@ -165,9 +172,13 @@ class GoogleMapsReviewScraper:
             print(f"Error: Unable to locate element with {type} : {target}")
             raise e   
         
-    def exit(self):
+    def exit(self, force=False):
         """function to close the browser
         """
+        if force:
+            self.driver.quit()
+            return
+        
         if not self.headless:
             _ = input("Press Enter to close the browser")     
         self.driver.quit()
@@ -225,7 +236,7 @@ class GoogleMapsReviewScraper:
             except NoSuchElementException as _: # no translation, original comment is the same as the comment
                 review['original'] = review['comment']
                  
-        logging.info(f"add Review: {review}")
+        logging.debug(f"add Review: {review}")
         return review
     
     def reset(self):
@@ -239,5 +250,11 @@ if __name__ == "__main__":
     url_1 = "https://www.google.com/maps/place/Wild+Code+School/@48.868858,2.4034931,17z/data=!3m1!5s0x47e66d9bebbd073f:0xe59d9cab917bdad8!4m8!3m7!1s0x47e671e4f9ed9097:0x21f0557e9b283397!8m2!3d48.8688545!4d2.406068!9m1!1b1!16s%2Fg%2F11fy11pqtq?entry=ttu&g_ep=EgoyMDI0MTIxMS4wIKXMDSoASAFQAw%3D%3D"
     url_2 = 'https://www.google.com/maps/place/Wild+Code+School+-+Training+Developer+Web,+Data+Analyst,+Informatique,+Web+Design/@45.7445824,4.8254488,14.5z/data=!4m8!3m7!1s0x47f4ea4ac9e1fd2f:0xabc36e768b27c9a0!8m2!3d45.7462982!4d4.8271744!9m1!1b1!16s%2Fg%2F11crz_x16l?hl=en&entry=ttu&g_ep=EgoyMDI1MDExMC4wIKXMDSoASAFQAw%3D%3D'
     DriverLocation = "./Driver/chromedriver.exe"
-    scrapper = GoogleMapsReviewScraper(urls=[url_1,], driver_path=DriverLocation, headless=False, verbose=True, delay=5, original=True, language="en", concat_extra=True)
-    scrapper.run()
+    scrapper = GoogleMapsReviewScraper(driver_path=DriverLocation, headless=False, verbose=True, delay=5, 
+                                       original=True, language="en", concat_extra=True)
+    scrapper.scrap(url_1)
+    scrapper.save_data(name="WildCodeSchool_1")
+    scrapper.reset()
+    scrapper.scrap(url_2)
+    scrapper.save_data(name="WildCodeSchool_2")
+    scrapper.exit(force=True)
