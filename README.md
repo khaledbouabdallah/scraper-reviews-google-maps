@@ -1,60 +1,107 @@
-# Scraper Reviews Google Maps
+# Google Maps Review Scraper
 
-This project is a web scraper designed to extract reviews from Google Maps. It can be used to gather customer feedback for businesses listed on Google Maps.
+A Python script to scrape Google Maps reviews using Selenium. This script extracts reviews, ratings, timestamps, user details, and more from Google Maps review pages. It supports exporting data to CSV or JSON formats.
 
 ## Features
 
-- Extract reviews from Google Maps
-- Save reviews to a CSV file
-- Handle pagination to get all reviews
-- Configurable to scrape reviews for different businesses
+- Scrapes reviews from Google Maps with detailed metadata.
+- Supports headless browser operation for efficiency.
+- Saves data as CSV or JSON.
+- Logs actions for debugging and analysis.
+- Allows customization through command-line arguments.
 
-## Requirements
+## Prerequisites
 
-- Python 3.x
-- BeautifulSoup
-- Requests
-- Pandas
+1. **Python 3.7 or later**: Ensure Python is installed.
+2. **Google Chrome**: The script uses Chrome as the browser.
+3. **ChromeDriver**: Download the ChromeDriver matching your Chrome version from [ChromeDriver Downloads](https://sites.google.com/a/chromium.org/chromedriver/).
 
 ## Installation
 
-1. Clone the repository:
+1. Clone this repository or download the script:
 
-    ```bash
-    git clone https://github.com/yourusername/scraper-reviews-google-maps.git
-    ```
+   ```bash
+   git clone https://github.com/yourusername/google-maps-review-scraper.git
+   ```
 
 2. Navigate to the project directory:
 
-    ```bash
-    cd scraper-reviews-google-maps
-    ```
+```bash
+cd google-maps-review-scraper
+```
 
-3. Install the required packages:
+3. Install the required dependencies:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+pip install -r requirements.txt
+```
 
-## Usage
+Usage
+Run the script with the following command-line arguments:
 
-1. Open the `config.py` file and set the `GOOGLE_MAPS_URL` to the URL of the business you want to scrape reviews for.
-2. Run the scraper:
+```bash
+python scraper.py --driver <PATH_TO_CHROMEDRIVER> --url <GOOGLE_MAPS_REVIEW_URL>
+```
 
-    ```bash
-    python scraper.py
-    ```
+## Command-Line Arguments
 
-3. The reviews will be saved to a `reviews.csv` file in the project directory.
+| Argument         | Type    | Default   | Description                                                              |
+| ---------------- | ------- | --------- | ------------------------------------------------------------------------ |
+| `--driver`       | string  | `Driver/chromedriver.exe`      | Path to the ChromeDriver executable (required).                          |
+| `--url`          | string  | None      | Google Maps reviews URL to scrape (required).                            |
+| `--headless`     | boolean | `True`    | Run the browser in headless mode (default: `True`).                      |
+| `--verbose`      | boolean | `False`   | Enable verbose logging (default: `False`).                               |
+| `--delay`        | int     | `10`      | Delay for WebDriver actions in seconds (default: `10`).                  |
+| `--original`     | boolean | `True`    | Include the original language comment (default: `True`).                 |
+| `--language`     | string  | `en`      | Language for reviews (default: English).                                 |
+| `--concat_extra` | boolean | `False`   | Combine extra review attributes into a single column (default: `False`). |
+| `--path`         | string  | `data`    | Directory to save scraped data (default: `data`).                        |
+| `--name`         | string  | `reviews` | File name prefix for saved data (default: `reviews`).                    |
+| `--timestamp`    | boolean | `True`    | Append a timestamp to the file name (default: `True`).                   |
+| `--log_file`     | string  | `None`    | File name for logging (default: logs displayed in the console).          |
 
-## Contributing
+## Code Usage Example
 
-Contributions are welcome! Please open an issue or submit a pull request for any changes.
+```python
+from app import GoogleMapsReviewScraper
+url_1 = "url_example_1"
+url_2 = 'url_example_2'
+DriverLocation = "./Driver/chromedriver.exe"
+scrapper = GoogleMapsReviewScraper(driver_path=DriverLocation, headless=False, verbose=True, delay=5, original=True, language="en", concat_extra=True)
+scrapper.scrap(url_1)
+scrapper.save_data(name="WildCodeSchool_1")
+scrapper.reset()
+scrapper.scrap(url_2)
+scrapper.save_data(name="WildCodeSchool_2")
+scrapper.exit(force=True)
+```
 
-## License
+## Output
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+The scraper produces two types of output files, depending on the `concat_extra` argument:
 
-## Contact
+1. **CSV File** (if `concat_extra` is set to `True`):
+2. **JSON File** (if `concat_extra` is set to `False`):
 
-For any questions or suggestions, please contact [yourname@example.com](mailto:yourname@example.com).
+The output files are saved in the directory specified by the `--path` argument. The file name will be a combination of the provided `--name` and the timestamp (if `--timestamp` is enabled).
+
+## Troubleshooting
+
+ChromeDriver not found: Ensure the `--driver` path is correct and points to the ChromeDriver executable.
+Google Maps URL issues: Verify the URL points to a valid Google Maps review page.
+Slow scraping: Adjust the `--delay` parameter to optimize performance.
+License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Contribution
+
+Feel free to open issues or submit pull requests to improve the script!
+
+## Acknowledgements
+
+Selenium for browser automation.
+Google Maps for the review data.
+
+## Disclaimer
+
+This script is intended for educational purposes only. Scraping data from websites may violate their terms of service. Use this tool responsibly.

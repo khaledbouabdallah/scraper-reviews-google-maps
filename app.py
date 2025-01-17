@@ -1,3 +1,4 @@
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -10,6 +11,7 @@ import pandas as pd
 import os
 import json
 import logging
+import argparse
 
 # import types for type hinting 
 from selenium.webdriver.remote.webelement import WebElement
@@ -17,15 +19,36 @@ from selenium.webdriver.remote.webelement import WebElement
 
 
 NOW = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-DATA_PATH = "data"
+#DATA_PATH = "data"
 MAPS_LINK = "https://maps.google.com/"
 
-# setup logger for the module on a file
 
-if not os.path.exists("logs"):
-    os.makedirs("logs")
-
-logging.basicConfig(filename=f'logs/app_{NOW}.log', level=logging.INFO)
+def get_arguments():
+    
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+    # read arguments from the command line
+    parser = argparse.ArgumentParser(description="Google Maps Review Scraper")
+    parser.add_argument("--driver", type=str, default="./Driver/chromedriver.exe", help="Path to the Chrome driver")
+    parser.add_argument("--url", type=str, help="URL of the Google Maps reviews")
+    parser.add_argument("--headless", type=str2bool, default=True, help="Run the browser in headless mode, default is True")
+    parser.add_argument("--verbose", type=str2bool, default=False, help="Verbose mode, default is False")
+    parser.add_argument("--delay", type=int, default=10, help="Delay for the driver, in seconds, default is 10s")
+    parser.add_argument("--original", type=str2bool, default=True, help="Get the comment in the original language, default is True")
+    parser.add_argument("--language", type=str, default="en", help="Language for the reviews, default is English")  
+    parser.add_argument("--concat_extra", type=str2bool, default=False, help="Concatenate extra attributes in a single column, default is False")
+    parser.add_argument("--path", type=str, default="data", help="Path to save the data, default is data")
+    parser.add_argument("--name", type=str, default="reviews", help="Name of the file to save the data, default is 'reviews'")
+    parser.add_argument("--timestamp", type=str2bool, default=True, help="Add timestamp to the file name, default is True")
+    parser.add_argument("--log_file", type=str, default=None, help="Name of the log file, default is None, show logs in command line") 
+    return parser.parse_args()
 
 class GoogleMapsReviewScraper:
     """
@@ -35,7 +58,7 @@ class GoogleMapsReviewScraper:
     accepted_languages = ["en", "fr", "de", "es", "it", "nl", "ja", "pt", "ru", "zh-CN"]
     
     def __init__(
-        self, driver_path, headless=True, verbose=False, delay=10, original=True, language="en", concat_extra=False, 
+        self, driver_path, headless=True, verbose=False, delay=10, original=True, language="en", concat_extra=False, log_file=None 
     ):
         # todo: make sure the URL is a valid Google Maps reviews link 
         options = webdriver.ChromeOptions()
@@ -44,6 +67,7 @@ class GoogleMapsReviewScraper:
         self.headless = headless
         self.original = original
         self.concat_extra = concat_extra
+        self.log_file = log_file
         
         # check if the language is accepted
         if language not in self.accepted_languages:
@@ -51,10 +75,12 @@ class GoogleMapsReviewScraper:
         # force language
         #self.url = f"{url}&hl={language}"
         
-        if verbose:
-            logging.basicConfig(level=logging.INFO)
+        level = logging.INFO if verbose else logging.ERROR
+        
+        if self.log_file:
+            logging.basicConfig(filename=f'logs/{log_file}_{NOW}.log', level=level)
         else:
-            logging.basicConfig(level=logging.ERROR)
+            logging.basicConfig(level=level)
         
         if self.headless:     
             options.add_argument("--headless")
@@ -247,14 +273,11 @@ class GoogleMapsReviewScraper:
 
 
 if __name__ == "__main__":
-    url_1 = "https://www.google.com/maps/place/Wild+Code+School/@48.868858,2.4034931,17z/data=!3m1!5s0x47e66d9bebbd073f:0xe59d9cab917bdad8!4m8!3m7!1s0x47e671e4f9ed9097:0x21f0557e9b283397!8m2!3d48.8688545!4d2.406068!9m1!1b1!16s%2Fg%2F11fy11pqtq?entry=ttu&g_ep=EgoyMDI0MTIxMS4wIKXMDSoASAFQAw%3D%3D"
-    url_2 = 'https://www.google.com/maps/place/Wild+Code+School+-+Training+Developer+Web,+Data+Analyst,+Informatique,+Web+Design/@45.7445824,4.8254488,14.5z/data=!4m8!3m7!1s0x47f4ea4ac9e1fd2f:0xabc36e768b27c9a0!8m2!3d45.7462982!4d4.8271744!9m1!1b1!16s%2Fg%2F11crz_x16l?hl=en&entry=ttu&g_ep=EgoyMDI1MDExMC4wIKXMDSoASAFQAw%3D%3D'
-    DriverLocation = "./Driver/chromedriver.exe"
-    scrapper = GoogleMapsReviewScraper(driver_path=DriverLocation, headless=False, verbose=True, delay=5, 
-                                       original=True, language="en", concat_extra=True)
-    scrapper.scrap(url_1)
-    scrapper.save_data(name="WildCodeSchool_1")
-    scrapper.reset()
-    scrapper.scrap(url_2)
-    scrapper.save_data(name="WildCodeSchool_2")
+    
+    args = get_arguments()
+    scrapper = GoogleMapsReviewScraper(driver_path=args.driver, headless=args.headless, verbose=args.verbose, delay=args.delay, 
+                                       original=args.original, language=args.language, concat_extra=args.concat_extra, log_file=args.log_file)
+    
+    _ = scrapper.scrap(args.url)
+    scrapper.save_data(path=args.path, name=args.name, timestamp=args.timestamp)
     scrapper.exit(force=True)
