@@ -127,31 +127,43 @@ class GoogleMapsReviewScraper:
 
     def extract_data(self, total_reviews):
         
-        reviews_data = []
+        
         # sort reviews by newest
         _= self._get_element_('//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div[8]/div[2]/button', By.XPATH).click()
         _ = self._get_element_('//*[@id="action-menu"]/div[2]', By.XPATH).click()
         
         # get scroll element
         scrollable_div = self._get_element_('//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[2]', By.XPATH)
-         
-        current_seen_reviews = 0
-        while current_seen_reviews < total_reviews:
-            # get new reviews
-            reviews = self._get_element_(target='jJc9Ad', type_=By.CLASS_NAME, multiple=True)
+        nb_tries = 0
+        while  nb_tries < 3:
+            try: 
+                current_seen_reviews = 0
+                reviews_data = []
+                # to avoid the StaleElementReferenceException error
+                time.sleep(1)   
+                while current_seen_reviews < total_reviews:
+                    # get new reviews
+                    reviews = self._get_element_(target='jJc9Ad', type_=By.CLASS_NAME, multiple=True)
+                    # wait for first review to load
+                    #_ = self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'd4r55')))
+                    # self.driver.get_screenshot_as_file("screenshot.png")
+                    for i in range(current_seen_reviews+1, len(reviews)+1):
+                        review = self._get_element_(f"(//*[contains(@class, 'jJc9Ad')])[{i}]", type_=By.XPATH, multiple=False)
+                        result = self._extract_review_(review, concat_extra=self.concat_extra)
+                        reviews_data.append(result)
+                    current_seen_reviews = len(reviews_data)
+                    # scroll to load more reviews
+                    self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", scrollable_div)
+                if len(reviews_data) == total_reviews:
+                    return reviews_data
+                
+            except (StaleElementReferenceException, TimeoutException) as e:
+                logging.error(f"TimeoutException: {e}")
+                nb_tries += 1  
+                continue
+            raise TimeoutException("Unable to extract all reviews, max number of tries reached")
             
-            # wait for first review to load
-            _ = self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'd4r55')))
-            # self.driver.get_screenshot_as_file("screenshot.png")
-            
-            for i in range(current_seen_reviews+1, len(reviews)+1):
-                review = self._get_element_(f"(//*[contains(@class, 'jJc9Ad')])[{i}]", type_=By.XPATH, multiple=False)
-                result = self._extract_review_(review, concat_extra=self.concat_extra)
-                reviews_data.append(result)
-            current_seen_reviews = len(reviews_data)
-            # scroll to load more reviews
-            self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", scrollable_div)
-        return reviews_data
+        
         
 
     def save_data(self, data, path= "data", name='', timestamp=True):
@@ -207,7 +219,7 @@ class GoogleMapsReviewScraper:
         
         try:
             if source: 
-                elements = WebDriverWait(source, self.timeout).until(condition((type_, target)))         
+                elements = WebDriverWait(driver=source,ignored_exceptions=ignored_exceptions,timeout= self.timeout).until(condition((type_, target)))         
             else:
                 elements = self.wait.until(condition((type_, target)))
             return elements
@@ -232,8 +244,8 @@ class GoogleMapsReviewScraper:
         # get username
         review['username'] = review_container.find_element_by_class_name('d4r55').text
         # get rating    
-        stars = review_container.find_element_by_class_name('kvMYJc').find_elements_by_class_name('hCCjke')
-        review['rating'] = len([star for star in stars if 'elGi1d' in star.get_attribute('class')])
+        stars = review_container.find_elements(By.XPATH, ".//span[contains(@class, 'hCCjke') and contains(@class, 'elGi1d')]")
+        review['rating'] = len(stars)
         # get date
         review['date'] = review_container.find_element_by_class_name('rsqaWe').text
         # check if has likes
