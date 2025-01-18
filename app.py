@@ -3,7 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, StaleElementReferenceException
 import re
 import datetime
 import time
@@ -16,7 +16,7 @@ import argparse
 # import types for type hinting 
 from selenium.webdriver.remote.webelement import WebElement
 
-
+ignored_exceptions = (NoSuchElementException, StaleElementReferenceException,)
 
 NOW = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 #DATA_PATH = "data"
@@ -58,16 +58,16 @@ class GoogleMapsReviewScraper:
     accepted_languages = ["en", "fr", "de", "es", "it", "nl", "ja", "pt", "ru", "zh-CN"]
     
     def __init__(
-        self, driver_path, headless=True, verbose=False, delay=10, original=True, language="en", concat_extra=False, log_file=None 
+        self, driver_path, headless=True, verbose=False, timeout=10, original=True, language="en", concat_extra=False, log_file=None 
     ):
         # todo: make sure the URL is a valid Google Maps reviews link 
         options = webdriver.ChromeOptions()
-        self.reviews = []
         self.now = NOW
         self.headless = headless
         self.original = original
         self.concat_extra = concat_extra
         self.log_file = log_file
+        self.timeout = timeout
         
         # check if the language is accepted
         if language not in self.accepted_languages:
@@ -84,12 +84,16 @@ class GoogleMapsReviewScraper:
         
         if self.headless:     
             options.add_argument("--headless")
+            options.add_argument("--window-size=1920,1080")
+            # user agent
+            #options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+            options.add_argument("–disable-gpu")
             
         
         # create an instance of the Chrome driver
         self.driver = webdriver.Chrome(executable_path=driver_path,options=options)
         # set the delay for the driver
-        self.wait = WebDriverWait(self.driver, delay)
+        self.wait = WebDriverWait(driver= self.driver,ignored_exceptions=ignored_exceptions, timeout= timeout)
         
         # connect to google maps and accept the cookies   
         try:
@@ -123,26 +127,35 @@ class GoogleMapsReviewScraper:
 
     def extract_data(self, total_reviews):
         
+        reviews_data = []
         # sort reviews by newest
         _= self._get_element_('//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div[8]/div[2]/button', By.XPATH).click()
         _ = self._get_element_('//*[@id="action-menu"]/div[2]', By.XPATH).click()
         
         # get scroll element
         scrollable_div = self._get_element_('//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[2]', By.XPATH)
-        
+         
         current_seen_reviews = 0
         while current_seen_reviews < total_reviews:
             # get new reviews
             reviews = self._get_element_(target='jJc9Ad', type_=By.CLASS_NAME, multiple=True)
-            reviews_data = [self._extract_review_(review, concat_extra=self.concat_extra) for review in reviews[current_seen_reviews:]]
-            self.reviews.extend(reviews_data)
-            current_seen_reviews = len(reviews)
-            #logging.info(f"Total reviews extracted: {current_seen_reviews}/{total_reviews}")
+            
+            # wait for first review to load
+            _ = self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'd4r55')))
+            # self.driver.get_screenshot_as_file("screenshot.png")
+            
+            for i in range(current_seen_reviews+1, len(reviews)+1):
+                review = self._get_element_(f"(//*[contains(@class, 'jJc9Ad')])[{i}]", type_=By.XPATH, multiple=False)
+                result = self._extract_review_(review, concat_extra=self.concat_extra)
+                reviews_data.append(result)
+            current_seen_reviews = len(reviews_data)
             # scroll to load more reviews
             self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", scrollable_div)
+        return reviews_data
         
 
-    def save_data(self, path= "data", name='', timestamp=True):
+    def save_data(self, data, path= "data", name='', timestamp=True):
+        
         if not os.path.exists(path):
             os.makedirs(path)
             
@@ -150,12 +163,13 @@ class GoogleMapsReviewScraper:
             name = f"{name}_{self.now}"
             
         if self.concat_extra:
-            df = pd.DataFrame(self.reviews)
+            df = pd.DataFrame(data)
             df.to_csv(f"{path}/{name}.csv", index=False)
+            logging.info(f"Data saved to {path}/{name}.csv")
         else:
             with open(f"{path}/{name}.json", "w") as f:
-                json.dump(self.reviews, f)
-        logging.info(f"Data saved to {path}")
+                json.dump(data, f)
+            logging.info(f"Data saved to {path}/{name}.json")
         
     def scrap(self, url):
         
@@ -167,12 +181,13 @@ class GoogleMapsReviewScraper:
                 logging.warning("No reviews were found, returning None")
                 return None
             
-            self.extract_data(total_reviews) 
+            data = self.extract_data(total_reviews) 
+            logging.info(f"Scraped {len(data)} reviews")
             end = time.time()   
             logging.info(f"Scraping completed in {end-start} seconds") 
-            return self.reviews         
+            return data       
         
-    def _get_element_(self, target, type_="class", multiple=False):
+    def _get_element_(self, target, type_, source=None, multiple=False):
         """
         Finds and returns a web element based on the given XPath.
 
@@ -187,12 +202,14 @@ class GoogleMapsReviewScraper:
         Raises:
             TimeoutException: If the element is not found within the timeout period.
         """
+            
+        condition = EC.presence_of_all_elements_located if multiple else EC.presence_of_element_located
         
         try:
-            if multiple:
-                elements = self.wait.until(EC.presence_of_all_elements_located((type_, target)))
+            if source: 
+                elements = WebDriverWait(source, self.timeout).until(condition((type_, target)))         
             else:
-                elements = self.wait.until(EC.presence_of_element_located((type_, target)))
+                elements = self.wait.until(condition((type_, target)))
             return elements
         except TimeoutException as e:
             print(f"Error: Unable to locate element with {type} : {target}")
@@ -206,7 +223,7 @@ class GoogleMapsReviewScraper:
             return
         
         if not self.headless:
-            _ = input("Press Enter to close the browser")     
+            _ = input("Type Anything to close the browser")     
         self.driver.quit()
         
     def _extract_review_(self, review_container: WebElement, concat_extra: bool = False) -> dict:
@@ -262,11 +279,9 @@ class GoogleMapsReviewScraper:
             except NoSuchElementException as _: # no translation, original comment is the same as the comment
                 review['original'] = review['comment']
                  
-        logging.debug(f"add Review: {review}")
         return review
     
     def reset(self):
-        self.reviews = []
         self.now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         logging.info("Resetting the scraper")
 
@@ -275,9 +290,11 @@ class GoogleMapsReviewScraper:
 if __name__ == "__main__":
     
     args = get_arguments()
-    scrapper = GoogleMapsReviewScraper(driver_path=args.driver, headless=args.headless, verbose=args.verbose, delay=args.delay, 
-                                       original=args.original, language=args.language, concat_extra=args.concat_extra, log_file=args.log_file)
     
-    _ = scrapper.scrap(args.url)
-    scrapper.save_data(path=args.path, name=args.name, timestamp=args.timestamp)
-    scrapper.exit(force=True)
+    try:
+        scrapper = GoogleMapsReviewScraper(driver_path=args.driver, headless=args.headless, verbose=args.verbose, delay=args.delay, 
+                                           original=args.original, language=args.language, concat_extra=args.concat_extra, log_file=args.log_file)
+        data = scrapper.scrap(args.url)
+        scrapper.save_data(data = data,path=args.path, name=args.name, timestamp=args.timestamp)
+    finally:
+        scrapper.exit(force=True)
