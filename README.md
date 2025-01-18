@@ -51,7 +51,7 @@ python scraper.py --driver <PATH_TO_CHROMEDRIVER> --url <GOOGLE_MAPS_REVIEW_URL>
 | `--url`          | string  | None      | Google Maps reviews URL to scrape (required).                            |
 | `--headless`     | boolean | `True`    | Run the browser in headless mode (default: `True`).                      |
 | `--verbose`      | boolean | `False`   | Enable verbose logging (default: `False`).                               |
-| `--delay`        | int     | `10`      | Delay for WebDriver actions in seconds (default: `10`).                  |
+| `--timeout`        | int     | `5`      | Delay for WebDriver actions in seconds (default: `10`).                  |
 | `--original`     | boolean | `True`    | Include the original language comment (default: `True`).                 |
 | `--language`     | string  | `en`      | Language for reviews (default: English).                                 |
 | `--concat_extra` | boolean | `False`   | Combine extra review attributes into a single column (default: `False`). |
@@ -64,15 +64,15 @@ python scraper.py --driver <PATH_TO_CHROMEDRIVER> --url <GOOGLE_MAPS_REVIEW_URL>
 
 ```python
 from app import GoogleMapsReviewScraper
-url_1 = "url_example_1"
-url_2 = 'url_example_2'
+url_1 = "url_example_1" # Google Maps location while reviews are visible
 DriverLocation = "./Driver/chromedriver.exe"
+# open browser 
 scrapper = GoogleMapsReviewScraper(driver_path=DriverLocation, headless=False, verbose=True, delay=5, original=True, language="en", concat_extra=True)
-scrapper.scrap(url_1)
-scrapper.save_data(name="WildCodeSchool_1")
-scrapper.reset()
-scrapper.scrap(url_2)
-scrapper.save_data(name="WildCodeSchool_2")
+# scrap data from url_1
+data = scrapper.scrap(url_1)
+# save in data/google_maps_reviews.csv
+scrapper.save_data(data= data, name="google_maps_reviews") 
+# close browser
 scrapper.exit(force=True)
 ```
 
